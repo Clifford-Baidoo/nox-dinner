@@ -14,6 +14,15 @@ export interface Offset {
 }
 
 function rectDimensions(shape: "square" | "rectangle", seatCount: number): { width: number; height: number } {
+  if (shape === "rectangle") {
+    // Banquet-style: one seat at each short end, the rest split evenly
+    // between the two long sides. Size the table to comfortably fit
+    // whichever long side ends up with more seats.
+    const longCount = Math.max(1, Math.ceil((seatCount - 2) / 2));
+    const width = Math.max(MIN_SIDE, longCount * PERIMETER_SEAT_GAP);
+    const height = Math.max(MIN_SIDE, width / RECT_ASPECT.rectangle);
+    return { width, height };
+  }
   const aspect = RECT_ASPECT[shape];
   const perimeter = Math.max(seatCount, 4) * PERIMETER_SEAT_GAP;
   const height = Math.max(MIN_SIDE, perimeter / (2 * (aspect + 1)));
@@ -29,15 +38,39 @@ export function seatOffsets(shape: TableShape, seatCount: number): Offset[] {
     });
   }
 
-  // Walk seats evenly around the rectangle's perimeter, offset outward from
-  // each edge. Each seat is placed at the *midpoint* of its slice of the
-  // perimeter (the "+ 0.5") rather than at the start — otherwise seats land
-  // exactly on the corners instead of being centered along each side.
   const { width, height } = rectDimensions(shape, seatCount);
   const halfW = width / 2;
   const halfH = height / 2;
-  const perimeter = 2 * (width + height);
 
+  if (shape === "rectangle") {
+    // Fixed banquet layout: seats walk top edge (left→right), the right
+    // end, the bottom edge (right→left), then the left end — one seat per
+    // short end, the remainder split evenly across the two long sides.
+    if (seatCount <= 2) {
+      const ends: Offset[] = [];
+      if (seatCount >= 1) ends.push({ dx: halfW + PERIMETER_SEAT_MARGIN, dy: 0 });
+      if (seatCount >= 2) ends.push({ dx: -halfW - PERIMETER_SEAT_MARGIN, dy: 0 });
+      return ends;
+    }
+    const remaining = seatCount - 2;
+    const topCount = Math.ceil(remaining / 2);
+    const bottomCount = remaining - topCount;
+    const offsets: Offset[] = [];
+    for (let j = 0; j < topCount; j++) {
+      offsets.push({ dx: -halfW + ((j + 0.5) / topCount) * width, dy: -halfH - PERIMETER_SEAT_MARGIN });
+    }
+    offsets.push({ dx: halfW + PERIMETER_SEAT_MARGIN, dy: 0 });
+    for (let j = 0; j < bottomCount; j++) {
+      offsets.push({ dx: halfW - ((j + 0.5) / bottomCount) * width, dy: halfH + PERIMETER_SEAT_MARGIN });
+    }
+    offsets.push({ dx: -halfW - PERIMETER_SEAT_MARGIN, dy: 0 });
+    return offsets;
+  }
+
+  // Square: walk seats evenly around the perimeter, centered on each edge's
+  // slice (the "+ 0.5") rather than at the slice start — otherwise seats
+  // land exactly on the corners instead of being centered along each side.
+  const perimeter = 2 * (width + height);
   return Array.from({ length: seatCount }, (_, i) => {
     const d = ((i + 0.5) / seatCount) * perimeter;
     if (d < width) return { dx: -halfW + d, dy: -halfH - PERIMETER_SEAT_MARGIN };
