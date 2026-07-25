@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Table {
+  id        String   @id @default(cuid())
+  name      String
+  sortOrder Int      @default(0)
+  shape     String   @default("round") // round | square | rectangle — determines how seats are arranged on the floor plan
+  x         Float?
+  y         Float?
+  seatCount Int
+  seats     Seat[]
+  createdAt DateTime @default(now())
+}
+
+model Seat {
+  id         String          @id @default(cuid())
+  tableId    String
+  table      Table           @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  label      String
+  assignment SeatAssignment?
+
+  @@unique([tableId, label])
+}
+
+model Booking {
+  id           String           @id @default(cuid())
+  code         String           @unique
+  guestName    String
+  phone        String?
+  seatsAllowed Int
+  status       String           @default("pending") // pending | confirmed | revoked
+  createdAt    DateTime         @default(now())
+  confirmedAt  DateTime?
+  assignments  SeatAssignment[]
+}
+
+model SeatAssignment {
+  id        String   @id @default(cuid())
+  seatId    String   @unique
+  seat      Seat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}

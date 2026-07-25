@@ -1,0 +1,11 @@
+node_modules
+dist
+*.log
+
+# SQLite DB + local env
+server/**/*.db
+server/**/*.db-journal
+server/.env
+
+# Build artifacts
+*.tsbuildinfo

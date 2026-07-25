@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
+
+  --color-cream: #faf8f4;
+  --color-cream-soft: #f7f4ec;
+  --color-paper: #fdfcf9;
+  --color-card: #ffffff;
+
+  --color-ink: #1f1d1a;
+  --color-ink-soft: #3c3a33;
+  --color-muted: #8d8677;
+  --color-muted-soft: #a09781;
+  --color-muted-faint: #b3ab98;
+
+  --color-hairline: #ebe6dc;
+  --color-hairline-soft: #f0ece2;
+  --color-line: #e2dcd0;
+  --color-line-soft: #e6e1d7;
+  --color-dot: #ece7db;
+
+  --color-forest: #1f4d3a;
+  --color-forest-hover: #2a6349;
+  --color-forest-tint: #eef3ee;
+  --color-forest-tint-border: #d9e5dc;
+  --color-forest-ring: #e6ecdf;
+  --color-forest-ink: #e7efe9;
+
+  --color-gold: #a3801f;
+  --color-gold-deep: #8a6d24;
+  --color-gold-tint: #fbf2dd;
+  --color-gold-tint-border: #f0e0b8;
+  --color-gold-surface: #f6ecd2;
+  --color-gold-surface-border: #dcc389;
+  --color-gold-taken: #d8c395;
+  --color-gold-taken-border: #bfa76d;
+
+  --color-wine: #7a2e3a;
+  --color-wine-deep: #5e2029;
+  --color-wine-tint: #f0dade;
+
+  --color-red: #9a3b3b;
+  --color-red-tint: #fdf4f4;
+  --color-red-tint-border: #eedcdc;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-cream text-ink font-sans;
+}
+
+a {
+  @apply text-forest;
+}
+a:hover {
+  @apply text-forest-hover underline;
+}
+
+::selection {
+  background: var(--color-forest-ring);
+}
+
+@keyframes nox-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-nox-up {
+  animation: nox-up 0.5s ease both;
+}
+
+/* Comfortably tappable seat circles per the mobile-first spec (min ~40px). */
+.seat-btn {
+  @apply flex items-center justify-center rounded-full text-[11px] font-medium transition-colors;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+}
