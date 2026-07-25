@@ -32,3 +32,8 @@ export interface BookingDetail {
   booking: BookingInfo;
   tables: TableWithSeats[];
 }
+
+export interface BookingSearchResult {
+  code: string;
+  guestName: string;
+}

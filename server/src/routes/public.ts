@@ -8,6 +8,24 @@ publicRouter.get("/settings", (_req, res) => {
   res.json({ eventName: process.env.EVENT_NAME || "Dinner Event" });
 });
 
+// Registered before /bookings/:code so "search" isn't swallowed as a :code value.
+publicRouter.get("/bookings/search", async (req, res) => {
+  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+  if (name.length < 2) {
+    res.json([]);
+    return;
+  }
+  const bookings = await prisma.booking.findMany({
+    where: {
+      guestName: { contains: name, mode: "insensitive" },
+      status: { not: "revoked" },
+    },
+    orderBy: { guestName: "asc" },
+    take: 8,
+  });
+  res.json(bookings.map((b) => ({ code: b.code, guestName: b.guestName })));
+});
+
 publicRouter.get("/bookings/:code", async (req, res) => {
   const code = req.params.code.trim().toUpperCase();
   const booking = await prisma.booking.findUnique({ where: { code } });
