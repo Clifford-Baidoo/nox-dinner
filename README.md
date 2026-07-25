@@ -4,11 +4,13 @@ A mobile-first seat booking app for a one-off dinner event. Payment happens offl
 
 - **Client**: React (Vite + TypeScript) + React Router + Tailwind CSS
 - **Server**: Node.js + Express (TypeScript) REST API
-- **DB**: SQLite via Prisma
+- **DB**: PostgreSQL via Prisma
 - **QR codes**: generated server-side with the `qrcode` package
 - **Auth**: no external auth service — a single admin password (`ADMIN_PASSWORD`) protects `/admin`, with a signed httpOnly cookie session
 
-In production the whole thing runs as **one Node process**: Express serves the built React app from `client/dist` as well as the `/api/*` REST API.
+The Express app (`server/src/app.ts`) is shared by two entrypoints:
+- `server/src/index.ts` — a traditional long-running Node process (serves the built client from `client/dist` too). Use this for VPS/Railway/Fly.io.
+- `api/index.ts` — a thin wrapper exporting the same app for Vercel's Node.js serverless runtime. On Vercel, `vercel.json` serves `client/dist` as static output and routes `/api/*` to this function.
 
 ## How it works
 
@@ -22,19 +24,26 @@ In production the whole thing runs as **one Node process**: Express serves the b
 
 ```
 DinnerSeats/
+├── api/        Vercel serverless entrypoint (re-exports the Express app)
 ├── client/     React app (Vite + TS + Tailwind + React Router)
-└── server/     Express API + Prisma (SQLite)
+└── server/     Express API + Prisma (PostgreSQL)
 ```
 
 ## Setup
 
-Requires Node 20+.
+Requires Node 20+ and a PostgreSQL database. For local dev without a cloud DB, run one in Docker:
 
 ```bash
-npm install                # installs both client and server workspaces
+docker run -d --name nox-dinner-pg -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=dinnerseats \
+  -p 55432:5432 -v nox-dinner-pgdata:/var/lib/postgresql/data --restart unless-stopped postgres:16-alpine
+```
+
+```bash
+npm install                # installs both client and server workspaces, generates the Prisma client
 cp server/.env.example server/.env
-# edit server/.env and set a real ADMIN_PASSWORD, EVENT_NAME, etc.
-npm run migrate            # applies the committed migrations, creates the SQLite file
+# edit server/.env: set DATABASE_URL (e.g. postgresql://postgres:devpass@localhost:55432/dinnerseats),
+# a real ADMIN_PASSWORD, EVENT_NAME, etc.
+npm run migrate            # applies the committed migrations
 npm run seed                # optional: demo layout + sample bookings
 ```
 
@@ -42,10 +51,10 @@ npm run seed                # optional: demo layout + sample bookings
 
 | Var | Purpose | Default |
 |---|---|---|
-| `DATABASE_URL` | SQLite file path | `file:./dev.db` |
+| `DATABASE_URL` | PostgreSQL connection string | *(required)* |
 | `ADMIN_PASSWORD` | Password for `/admin` | *(required)* |
 | `EVENT_NAME` | Shown in the header on every page | `Dinner Event` |
-| `PORT` | Express port | `3001` |
+| `PORT` | Express port (ignored on Vercel) | `3001` |
 | `COOKIE_SECRET` | Signs the admin session cookie | falls back to `ADMIN_PASSWORD` |
 
 ## Running locally
@@ -95,10 +104,8 @@ Seat confirmation is the one place double-booking could happen, so it's handled 
 
 ## Deployment notes
 
-Since this uses SQLite (a single file), it's single-instance hosting:
+The app now uses PostgreSQL, so it's fine to run on stateless/serverless hosting as well as traditional single-process hosting:
 
+- **Vercel**: import the repo, set `DATABASE_URL`, `ADMIN_PASSWORD`, `EVENT_NAME`, `COOKIE_SECRET` as project env vars. `vercel.json` builds the client to `client/dist` (served as static output) and routes `/api/*` to `api/index.ts`, a serverless function wrapping the same Express app. `postinstall: prisma generate` in `server/package.json` runs automatically during Vercel's build. Use a pooled Postgres connection string (e.g. Neon's `-pooler` host) since each function invocation can open its own connection. Run `npm run migrate` against production `DATABASE_URL` once (locally or via a one-off script) before/after the first deploy — Vercel doesn't run migrations for you.
 - **VPS**: `npm run build`, run `NODE_ENV=production node server/dist/index.js` behind a process manager (pm2/systemd) and reverse proxy (nginx/caddy) for TLS.
-- **Railway / Render**: deploy as a single Node service, set env vars, add a persistent volume/disk for the SQLite file (`server/dev.db`), run `npm run build` then `npm start`.
-- **Fly.io**: attach a volume for the SQLite file, same build/start commands.
-
-Don't run multiple instances against the same SQLite file — it's not designed for that. For an event this size a single instance is more than enough.
+- **Railway / Render / Fly.io**: deploy as a single Node service, set env vars (including `DATABASE_URL` pointing at a managed Postgres instance), run `npm run build` then `npm start`.
