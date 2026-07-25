@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import type { BookingDetail } from "../lib/types";
 import { useSettings } from "../lib/useSettings";
@@ -266,8 +266,17 @@ export default function BookingPage() {
 function Shell({ children, eventName }: { children: React.ReactNode; eventName: string }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-cream-soft to-cream">
-      <div className="flex h-16 items-center justify-center border-b border-hairline bg-white/95">
-        <span className="font-serif text-[15px] uppercase tracking-[0.3em] text-gold">{eventName}</span>
+      <div className="grid h-16 grid-cols-[1fr_auto_1fr] items-center border-b border-hairline bg-white/95 px-4">
+        <Link
+          to="/"
+          className="justify-self-start text-[13px] text-muted-soft transition-colors hover:text-forest"
+        >
+          ← Back
+        </Link>
+        <span className="justify-self-center font-serif text-[15px] uppercase tracking-[0.3em] text-gold">
+          {eventName}
+        </span>
+        <span />
       </div>
       {children}
     </div>
