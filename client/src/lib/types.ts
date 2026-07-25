@@ -5,6 +5,8 @@ export interface Seat {
   isMine?: boolean;
   guestName?: string;
   bookingCode?: string;
+  dx?: number | null;
+  dy?: number | null;
 }
 
 export type TableShape = "round" | "square" | "rectangle";

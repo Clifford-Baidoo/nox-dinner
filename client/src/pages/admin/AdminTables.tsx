@@ -87,6 +87,15 @@ export default function AdminTables() {
     }
   }
 
+  async function handleSeatMove(id: string, dx: number, dy: number) {
+    try {
+      await api.put(`/admin/seats/${id}`, { dx, dy });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to move seat");
+    }
+  }
+
   if (loading) return <p className="text-muted">Loading…</p>;
 
   return (
@@ -138,7 +147,8 @@ export default function AdminTables() {
 
       <div>
         <p className="mb-2 text-sm text-muted">
-          Drag tables below to match your venue's real layout. Positions save automatically.
+          Drag tables — or individual chairs around a table — to match your venue's real layout. Positions save
+          automatically.
         </p>
         <div className="mb-3 flex flex-wrap gap-5 text-[13px] text-muted">
           <span className="flex items-center gap-1.5">
@@ -158,6 +168,7 @@ export default function AdminTables() {
           }
           editablePositions
           onTableMove={handleMove}
+          onSeatMove={handleSeatMove}
           maxHeight="65vh"
         />
       </div>

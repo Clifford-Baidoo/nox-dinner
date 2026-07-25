@@ -43,6 +43,8 @@ publicRouter.get("/bookings/:code", async (req, res) => {
         label: seat.label,
         taken: Boolean(seat.assignment),
         isMine: seat.assignment?.bookingId === booking.id,
+        dx: seat.dx,
+        dy: seat.dy,
       })),
     })),
   });

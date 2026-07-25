@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TableWithSeats } from "../lib/types";
-import { hubSize, seatOffsets, tableFootprint } from "../lib/floorPlanGeometry";
+import { hubSize, seatOffsets, tableFootprint, SEAT_SIZE } from "../lib/floorPlanGeometry";
 
 interface Position {
   x: number;
@@ -17,6 +17,8 @@ interface FloorPlanProps {
   onSeatClick?: (seat: SeatType) => void;
   editablePositions?: boolean;
   onTableMove?: (tableId: string, x: number, y: number) => void;
+  /** Called with the seat's new offset (dx, dy) from its table's hub after a drag. */
+  onSeatMove?: (seatId: string, dx: number, dy: number) => void;
   /** CSS max-height for the scrollable viewport, e.g. "60vh" or "420px". */
   maxHeight?: string;
   /** When set, auto-scrolls the viewport to center on these seats once their position is known. */
@@ -41,11 +43,14 @@ export function FloorPlan({
   onSeatClick,
   editablePositions = false,
   onTableMove,
+  onSeatMove,
   maxHeight = "60vh",
   centerSeatIds,
 }: FloorPlanProps) {
   const [positions, setPositions] = useState<Record<string, Position>>({});
+  const [seatPositions, setSeatPositions] = useState<Record<string, Position>>({});
   const draggingId = useRef<string | null>(null);
+  const draggingSeatId = useRef<string | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const centeredForKey = useRef<string | null>(null);
 
@@ -56,6 +61,26 @@ export function FloorPlan({
         tables.map((t, i) => [t.id, { x: t.x ?? fallbackPosition(i).x, y: t.y ?? fallbackPosition(i).y }])
       )
     );
+  }, [tables]);
+
+  // Seats default to their auto-computed spot around the table (seatOffsets)
+  // unless the seat has a saved dx/dy override, or is mid-drag right now.
+  useEffect(() => {
+    setSeatPositions((prev) => {
+      const next: Record<string, Position> = {};
+      for (const t of tables) {
+        const offsets = seatOffsets(t.shape, t.seats.length);
+        t.seats.forEach((seat, i) => {
+          if (draggingSeatId.current === seat.id) {
+            next[seat.id] = prev[seat.id] ?? offsets[i];
+            return;
+          }
+          next[seat.id] =
+            seat.dx != null && seat.dy != null ? { x: seat.dx, y: seat.dy } : { x: offsets[i].dx, y: offsets[i].dy };
+        });
+      }
+      return next;
+    });
   }, [tables]);
 
   // Auto-scroll to the guest's own seat(s) the first time we know where they
@@ -74,7 +99,8 @@ export function FloorPlan({
       const offsets = seatOffsets(t.shape, t.seats.length);
       t.seats.forEach((seat, i) => {
         if (centerSeatIds.has(seat.id)) {
-          points.push({ x: pos.x + offsetX + offsets[i].dx, y: pos.y + offsetY + offsets[i].dy });
+          const sp = seatPositions[seat.id] ?? { x: offsets[i].dx, y: offsets[i].dy };
+          points.push({ x: pos.x + offsetX + sp.x, y: pos.y + offsetY + sp.y });
         }
       });
     }
@@ -88,7 +114,7 @@ export function FloorPlan({
       behavior: "smooth",
     });
     centeredForKey.current = key;
-  }, [positions, tables, centerSeatIds]);
+  }, [positions, seatPositions, tables, centerSeatIds]);
 
   // Chairs and tables always render at their natural size. The canvas
   // grows to fit however far tables have been dragged; if that's bigger
@@ -109,6 +135,19 @@ export function FloorPlan({
     canvasHeight = Math.max(canvasHeight, pos.y + fp.halfHeight + PADDING);
     offsetX = Math.max(offsetX, PADDING - (pos.x - fp.halfWidth));
     offsetY = Math.max(offsetY, PADDING - (pos.y - fp.halfHeight));
+
+    // A manually dragged seat can sit outside the table's normal footprint —
+    // make sure the canvas still grows/shifts to keep it fully in view.
+    const defaultOffsets = seatOffsets(t.shape, t.seats.length);
+    t.seats.forEach((seat, i) => {
+      const sp = seatPositions[seat.id] ?? { x: defaultOffsets[i].dx, y: defaultOffsets[i].dy };
+      const seatX = pos.x + sp.x;
+      const seatY = pos.y + sp.y;
+      canvasWidth = Math.max(canvasWidth, seatX + SEAT_SIZE / 2 + PADDING);
+      canvasHeight = Math.max(canvasHeight, seatY + SEAT_SIZE / 2 + PADDING);
+      offsetX = Math.max(offsetX, PADDING - (seatX - SEAT_SIZE / 2));
+      offsetY = Math.max(offsetY, PADDING - (seatY - SEAT_SIZE / 2));
+    });
   }
   canvasWidth += offsetX;
   canvasHeight += offsetY;
@@ -143,6 +182,36 @@ export function FloorPlan({
     window.addEventListener("pointerup", onUp, { once: true });
   }
 
+  function handleSeatPointerDown(e: React.PointerEvent, seatId: string) {
+    if (!editablePositions) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const startPos = seatPositions[seatId] ?? { x: 0, y: 0 };
+    draggingSeatId.current = seatId;
+
+    function toNext(ev: PointerEvent): Position {
+      const dx = ev.clientX - startClientX;
+      const dy = ev.clientY - startClientY;
+      return { x: Math.round(startPos.x + dx), y: Math.round(startPos.y + dy) };
+    }
+
+    function onMove(ev: PointerEvent) {
+      setSeatPositions((prev) => ({ ...prev, [seatId]: toNext(ev) }));
+    }
+    function onUp(ev: PointerEvent) {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const next = toNext(ev);
+      draggingSeatId.current = null;
+      setSeatPositions((prev) => ({ ...prev, [seatId]: next }));
+      onSeatMove?.(seatId, next.x, next.y);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
   return (
     <div className="w-full min-w-0 rounded-[18px] border border-hairline bg-card p-2.5 shadow-[0_1px_2px_rgba(31,29,26,0.03)]">
       <div
@@ -164,7 +233,7 @@ export function FloorPlan({
           {tables.map((table) => {
             const pos = positions[table.id];
             if (!pos) return null;
-            const offsets = seatOffsets(table.shape, table.seats.length);
+            const defaultOffsets = seatOffsets(table.shape, table.seats.length);
             const hub = hubSize(table.shape, table.seats.length);
             return (
               <div
@@ -190,10 +259,19 @@ export function FloorPlan({
                   {table.name}
                 </button>
                 {table.seats.map((seat, i) => {
-                  const { dx, dy } = offsets[i];
+                  const { x: dx, y: dy } = seatPositions[seat.id] ?? {
+                    x: defaultOffsets[i].dx,
+                    y: defaultOffsets[i].dy,
+                  };
                   const isSelected = selectedSeatIds?.has(seat.id);
                   const isMine = seat.isMine;
-                  const disabled = seatDisabled ? seatDisabled(seat) : seat.taken && !isSelected;
+                  // While rearranging the layout, seats must stay interactive (for
+                  // dragging) regardless of their normal taken/selected disabled state.
+                  const disabled = editablePositions
+                    ? false
+                    : seatDisabled
+                      ? seatDisabled(seat)
+                      : seat.taken && !isSelected;
                   let classes = "seat-btn border ";
                   if (seatColorClass) {
                     classes += seatColorClass(seat, Boolean(isSelected));
@@ -204,7 +282,8 @@ export function FloorPlan({
                   } else {
                     classes += "border-line-soft bg-white text-muted-soft";
                   }
-                  if (!disabled) classes += " active:scale-95";
+                  if (editablePositions) classes += " cursor-grab active:cursor-grabbing";
+                  else if (!disabled) classes += " active:scale-95";
                   else classes += " cursor-not-allowed";
                   return (
                     <button
@@ -212,7 +291,14 @@ export function FloorPlan({
                       type="button"
                       disabled={disabled}
                       onClick={() => onSeatClick?.(seat)}
-                      style={{ position: "absolute", left: dx, top: dy, transform: "translate(-50%, -50%)" }}
+                      onPointerDown={(e) => handleSeatPointerDown(e, seat.id)}
+                      style={{
+                        position: "absolute",
+                        left: dx,
+                        top: dy,
+                        transform: "translate(-50%, -50%)",
+                        touchAction: editablePositions ? "none" : undefined,
+                      }}
                       className={classes}
                       title={seat.guestName ? `${seat.label} — ${seat.guestName}` : seat.label}
                     >

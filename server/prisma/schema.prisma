@@ -24,6 +24,10 @@ model Seat {
   tableId    String
   table      Table           @relation(fields: [tableId], references: [id], onDelete: Cascade)
   label      String
+  // Offset from the table's hub, in floor-plan px. Null means "use the
+  // automatic layout for this table shape" (see seatOffsets in the client).
+  dx         Float?
+  dy         Float?
   assignment SeatAssignment?
 
   @@unique([tableId, label])

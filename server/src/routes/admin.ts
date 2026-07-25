@@ -59,7 +59,7 @@ adminRouter.get("/tables", async (_req, res) => {
       x: t.x,
       y: t.y,
       seatCount: t.seatCount,
-      seats: t.seats.map((s) => ({ id: s.id, label: s.label, taken: Boolean(s.assignment) })),
+      seats: t.seats.map((s) => ({ id: s.id, label: s.label, taken: Boolean(s.assignment), dx: s.dx, dy: s.dy })),
     }))
   );
 });
@@ -96,6 +96,23 @@ adminRouter.post("/tables", async (req, res) => {
     include: { seats: true },
   });
   res.status(201).json(table);
+});
+
+adminRouter.put("/seats/:id", async (req, res) => {
+  const { dx, dy } = req.body ?? {};
+  if (typeof dx !== "number" || typeof dy !== "number") {
+    res.status(400).json({ error: "dx and dy must be numbers" });
+    return;
+  }
+  const seat = await prisma.seat.update({
+    where: { id: req.params.id },
+    data: { dx, dy },
+  }).catch(() => null);
+  if (!seat) {
+    res.status(404).json({ error: "Seat not found" });
+    return;
+  }
+  res.json({ id: seat.id, dx: seat.dx, dy: seat.dy });
 });
 
 adminRouter.put("/tables/:id", async (req, res) => {
@@ -373,6 +390,8 @@ adminRouter.get("/seatmap", async (_req, res) => {
         taken: Boolean(s.assignment),
         guestName: s.assignment?.booking.guestName,
         code: s.assignment?.booking.code,
+        dx: s.dx,
+        dy: s.dy,
       })),
     }))
   );
